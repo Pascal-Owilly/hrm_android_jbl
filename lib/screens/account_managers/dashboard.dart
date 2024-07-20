@@ -8,6 +8,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:intl/intl.dart';
 import '../../screens/sidebar.dart';
 import '../../screens/constant.dart';
+import '../../location_service.dart'; 
+import 'package:provider/provider.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({Key? key}) : super(key: key);
@@ -358,72 +360,82 @@ Future<void> fetchClockIns() async {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Account Manager Dashboard'),
-      ),
-      drawer: CustomSidebar(),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Clients assigned under you',
-                style: TextStyle(color: Colors.blue),
-              ),
-              SizedBox(height: 16.0),
-              _buildClientList(),
-              SizedBox(height: 16.0),
-              Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (clockedIn) ...[
-                        ElevatedButton.icon(
-                          onPressed: _clockInOrOut,
-                          icon: Icon(Icons.logout),
-                          label: Text('Clock Out'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFFFFFF),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20.0),
-                            ),
-                          ),
-                        ),
-                      ] else ...[
-                        ElevatedButton.icon(
-                          onPressed: _clockInOrOut,
-                          icon: Icon(Icons.check),
-                          label: Text('Clock In'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFFFFFF),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20.0),
-                            ),
-                          ),
-                        ),
-                      ],
-                      SizedBox(height: 16.0),
-                      Text(
-                        'List of your employees clock-ins today',
-                        style: TextStyle(color: Colors.blue),
-                      ),
-                      SizedBox(height: 16.0),
-                      _buildAttendanceTable(),
-                      SizedBox(height: 16.0),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+  final locationService = Provider.of<LocationService>(context);
+
+    // Access latitude and longitude from LocationService
+    latitude = locationService.latitude;
+    longitude = locationService.longitude;
+
+   return Scaffold(
+  appBar: AppBar(
+    title: const Text('Account Manager Dashboard'),
+    actions: [
+      if (latitude != null && longitude != null)
+        Padding(
+          padding: const EdgeInsets.only(right: 16.0),
+          child: Center(
+            child: Text(
+              'Lat: ${latitude!.toStringAsFixed(2)}, Long: ${longitude!.toStringAsFixed(2)}',
+              style: const TextStyle(color: Color(0xFF2F8E92), fontSize: 13),
+            ),
           ),
         ),
+      IconButton(
+        icon: const Icon(Icons.refresh),
+        onPressed: () {
+          setState(() {}); // Reload the page
+        },
       ),
-    );
+    ],
+  ),
+  drawer: const CustomSidebar(),
+  body: SingleChildScrollView(
+    child: Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Clients assigned under you',
+            style: TextStyle(color: Colors.blue),
+          ),
+          const SizedBox(height: 16.0),
+          _buildClientList(),
+          const SizedBox(height: 16.0),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _clockInOrOut,
+                    icon: clockedIn ? const Icon(Icons.logout) : const Icon(Icons.check),
+                    label: Text(clockedIn ? 'Clock Out' : 'Clock In'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFFFFFF),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20.0),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16.0),
+                  const Text(
+                    'List of your employees clock-ins today',
+                    style: TextStyle(color: Colors.blue),
+                  ),
+                  const SizedBox(height: 16.0),
+                  _buildAttendanceTable(),
+                  const SizedBox(height: 16.0),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ),
+);
   }
 
 // Inside _DashboardPageState class

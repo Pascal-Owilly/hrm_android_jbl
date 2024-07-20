@@ -23,6 +23,8 @@ class LoginScreen extends StatelessWidget {
 
       if (response.statusCode == 200) {
         Map<String, dynamic> jsonResponse = jsonDecode(response.body);
+        print('JSON response: $jsonResponse'); 
+
         String token = jsonResponse['token'];
         String username = jsonResponse['username'];
         String role = jsonResponse['role'];

@@ -5,6 +5,8 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:carousel_slider/carousel_slider.dart';
 import '../../widgets/common_layout.dart';
 import '../../screens/sidebar.dart';
+import '../../location_service.dart'; 
+import 'package:provider/provider.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -72,6 +74,11 @@ try {
 
   @override
   Widget build(BuildContext context) {
+      final locationService = Provider.of<LocationService>(context);
+
+    // Access latitude and longitude from LocationService
+    latitude = locationService.latitude;
+    longitude = locationService.longitude;
     return CommonLayout(
       title: 'Jawabu Best Limited Administration',
       titleStyle: const TextStyle(

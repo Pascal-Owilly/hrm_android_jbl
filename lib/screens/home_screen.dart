@@ -1,14 +1,67 @@
-import 'dart:async'; // For Timer
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import '../location_service.dart'; 
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
+
+  @override
+  _HomeScreenState createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+
+Future<void> _requestPermissions(BuildContext context) async {
+  print('Checking location permissions...');
+  var locationStatus = await Permission.location.status;
+
+  if (locationStatus.isGranted) {
+    print('Location permission already granted.');
+    Navigator.pushNamed(context, '/login');
+  } else if (locationStatus.isDenied) {
+    print('Requesting location permission...');
+    var newStatus = await Permission.location.request();
+    if (newStatus.isGranted) {
+      print('Location permission granted.');
+      Navigator.pushNamed(context, '/login');
+    } else {
+      _showPermissionError(context);
+    }
+  } else if (locationStatus.isPermanentlyDenied) {
+    print('Location permission permanently denied.');
+    openAppSettings();
+  }
+}
+
+
+  void _showPermissionError(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Location permission is required.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  Future<void> _getDeviceId() async {
+    try {
+      DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+      String deviceId = androidInfo.id; 
+      print('Device ID: $deviceId');
+    } catch (e) {
+      print('Error getting device info: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFFfdeb3d), // Set AppBar background color
+        backgroundColor: const Color(0xFFfdeb3d),
         elevation: 0,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -16,8 +69,8 @@ class HomeScreen extends StatelessWidget {
             Container(
               margin: const EdgeInsets.all(8.0),
               child: Image.asset(
-                'assets/images/jawabu_logo.jpeg', // Replace with your logo asset
-                height: 40, // Adjust size as needed
+                'assets/images/jawabu_logo.jpeg',
+                height: 40,
               ),
             ),
           ],
@@ -39,19 +92,19 @@ class HomeScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Carousel
               SizedBox(
-                height: 240, // Adjust height as needed
+                height: 240,
                 child: CarouselWidget(),
               ),
-              const SizedBox(height: 30.0), // Adjust space between carousel and button
-              // Button
+              const SizedBox(height: 30.0),
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/login'); // Navigate to login screen
+                onPressed: () async {
+                  print('Get started button pressed.');
+                  await _requestPermissions(context);
+                  Navigator.pushNamed(context, '/login');
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF773697), // Button color
+                  backgroundColor: const Color(0xFF773697),
                   padding: const EdgeInsets.symmetric(
                     vertical: 12.0,
                     horizontal: 24.0,
@@ -64,11 +117,11 @@ class HomeScreen extends StatelessWidget {
                   'Get started →',
                   style: TextStyle(
                     fontSize: 18.0,
-                    color: Colors.white, // Text color
+                    color: Colors.white,
                   ),
                 ),
               ),
-              const SizedBox(height: 50.0), // Space below button
+              const SizedBox(height: 50.0),
             ],
           ),
         ),
@@ -171,7 +224,7 @@ class _CarouselWidgetState extends State<CarouselWidget> {
   }
 }
 
-class CarouselItem extends StatefulWidget {
+class CarouselItem extends StatelessWidget {
   final String title;
   final String subtitle;
 
@@ -182,58 +235,34 @@ class CarouselItem extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  _CarouselItemState createState() => _CarouselItemState();
-}
-
-class _CarouselItemState extends State<CarouselItem> {
-  double _opacity = 1.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _startFadeAnimation();
-  }
-
-  void _startFadeAnimation() {
-    Timer.periodic(const Duration(seconds: 3), (Timer timer) {
-      setState(() {
-        _opacity = _opacity == 1.0 ? 0.0 : 1.0;
-      });
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      opacity: _opacity,
-      duration: const Duration(milliseconds: 1000),
-      curve: Curves.easeInOut,
-      child: Container(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.title,
-              style: const TextStyle(
-                fontSize: 18.0,
-                fontWeight: FontWeight.bold,
-                color: Colors.white, // Text color
-              ),
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18.0,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
-            const SizedBox(height: 8.0),
-            Text(
-              widget.subtitle,
-              style: const TextStyle(
-                fontSize: 14.0,
-                color: Colors.white, // Text color
-              ),
+          ),
+          const SizedBox(height: 8.0),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              fontSize: 14.0,
+              color: Colors.white,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
+
+             
 

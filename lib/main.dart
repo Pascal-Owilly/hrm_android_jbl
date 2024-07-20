@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'location_service.dart';
 import 'screens/auth/admin_register.dart';
 import 'screens/auth/login.dart';
 import 'screens/auth/password_reset.dart';
@@ -25,7 +27,12 @@ import 'screens/admin/admin_list.dart';
 import 'screens/account_managers/dashboard.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => LocationService(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -39,10 +46,9 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         primaryColor: const Color(0xFFFDEB3D),
       ),
-      home: const HomeScreen(), // Set the initial screen to HomeScreen
+      home: const HomeScreen(),
       onGenerateRoute: (settings) {
         switch (settings.name) {
-        
           case '/home':
             return MaterialPageRoute(builder: (context) => const HomeScreen());
           case '/admin_register':
@@ -50,15 +56,13 @@ class MyApp extends StatelessWidget {
           case '/login':
             return MaterialPageRoute(builder: (context) => LoginScreen());
           case '/password_reset':
-		  final args = settings.arguments as Map<String, String>;
-		  return MaterialPageRoute(
-		    builder: (context) => PasswordResetScreen(
-		      uidb64: args['uidb64']!,
-		      token: args['token']!,
-		    ),
-		  );
-
-     
+            final args = settings.arguments as Map<String, String>;
+            return MaterialPageRoute(
+              builder: (context) => PasswordResetScreen(
+                uidb64: args['uidb64']!,
+                token: args['token']!,
+              ),
+            );
           case '/users':
             return MaterialPageRoute(builder: (context) => const UserListScreen());
           case '/admin_list':
@@ -69,7 +73,6 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(builder: (context) => const HrListScreen());
           case '/account_manager_dashboard':
             return MaterialPageRoute(builder: (context) => const DashboardPage());
-        
           case '/add_new_employee':
             return MaterialPageRoute(builder: (context) => const NewEmployeeScreen());
           case '/employee_bulk_upload':
@@ -78,41 +81,32 @@ class MyApp extends StatelessWidget {
             return MaterialPageRoute(builder: (context) => const NewClientScreen());
           case '/list_clients':
             return MaterialPageRoute(builder: (context) => const ClientListScreen());
-            
           case '/single_client':
-            // Extract clientId from arguments if needed
             final clientId = settings.arguments as String?;
             return MaterialPageRoute(builder: (context) => ClientInfoScreen(clientId: clientId ?? ''));
           case '/edit_client':
-            // Extract clientId from arguments if needed
             final clientId = settings.arguments as String?;
             return MaterialPageRoute(builder: (context) => EditClientScreen(clientId: clientId ?? ''));
           case '/employee/dashboard':
-      	    return MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen());
+            return MaterialPageRoute(builder: (context) => const EmployeeDashboardScreen());
           case '/list_employees':
             return MaterialPageRoute(builder: (context) => const EmployeeListScreen());
           case '/user_detail':
-            // Extract userId from arguments if needed
             final userId = settings.arguments as String?;
             return MaterialPageRoute(builder: (context) => UserDetailScreen(userId: userId ?? ''));
           case '/employee_detail':
-            // Extract userId from arguments if needed
             final employeeId = settings.arguments as String?;
             return MaterialPageRoute(builder: (context) => EmployeeDetailScreen(employeeId: employeeId ?? ''));
           case '/user_edit':
-            // Extract userId from arguments if needed
             final userId = settings.arguments as String?;
             return MaterialPageRoute(builder: (context) => EditUserScreen(userId: userId ?? ''));
           case '/user_archive':
-            // Extract userId from arguments if needed
             final userId = settings.arguments as String?;
             return MaterialPageRoute(builder: (context) => ArchiveUserScreen(userId: userId ?? ''));
           case '/user_unarchive':
-            // Extract userId from arguments if needed
             final userId = settings.arguments as String?;
             return MaterialPageRoute(builder: (context) => UnarchiveUserScreen(userId: userId ?? ''));
           case '/user_delete':
-            // Extract userId from arguments if needed
             final userId = settings.arguments as String?;
             return MaterialPageRoute(builder: (context) => DeleteUserScreen(userId: userId ?? ''));
           case '/archived_users':
