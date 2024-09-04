@@ -116,7 +116,7 @@ Future<void> _clockInOrOut() async {
       );
     } else {
       final errorResponse = jsonDecode(response.body);
-      final errorMessage = errorResponse['message'] ?? 'Failed to clock in/out. Failed to clock in/out. Ensure your location services are enabled then try again';
+      final errorMessage = errorResponse['error'] ?? 'Failed to clock in/out. Failed to clock in/out. Ensure your location services are enabled then try again';
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(errorMessage)),

@@ -87,6 +87,19 @@ class _CustomSidebarState extends State<CustomSidebar> {
       ));
 
     }
+    
+        if (role == 'employee') {
+      items.add(ListTile(
+        leading: Icon(Icons.dashboard, color: Color(0xFF773697)),
+        title: Text('Dashboard', style: TextStyle(color: Colors.black)),
+        onTap: () {
+          Navigator.pushReplacementNamed(context, '/employee/dashboard');
+        },
+      ));
+
+
+    }
+    
 
     // Show Attendance link for superuser and employee
     if (role == 'human_resource_manager') {

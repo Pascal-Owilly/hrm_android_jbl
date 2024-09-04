@@ -36,6 +36,10 @@ class EmployeeDashboardScreen extends StatefulWidget {
 }
 
 class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
+
+  bool _isLoading = false;
+
+
   // Define a key for storing clockedIn state in SharedPreferences
   static const String _clockedInKey = 'clockedIn';
   DateTime selectedDate = DateTime.now();
@@ -45,38 +49,34 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   bool clockedIn = false;
   List<dynamic> clockIns = [];
   String? userId;
-  String? imei;
+  String? _androidId;
 
   Future<bool> isSdk30OrHigher() async {
     AndroidDeviceInfo build = await DeviceInfoPlugin().androidInfo;
     return build.version.sdkInt >= 30;
   }
 
-  Future<void> _getIMEI() async {
-    if (await Permission.phone.request().isGranted) {
-      DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-      if (mounted) {
-        setState(() {
-          imei = androidInfo.id; 
-        });
-      }
-    } else {
-      print('Phone permission not granted');
-    }
+  // Function to get Android ID
+  Future<void> _getAndroidId() async {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+
+    setState(() {
+      _androidId = androidInfo.id; // Retrieve Android ID
+    });
   }
 
   @override
   void initState() {
     super.initState();
-     // Fetch and initialize clockedIn state from SharedPreferences
     _loadClockedInState();
     fetchUserData();
 
     fetchClockIns();
-    _getIMEI();
+    _getAndroidId();
   }
   
+ 
   Future<void> _loadClockedInState() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -99,19 +99,22 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   }
 
 Future<void> _clockInOrOut() async {
-  final url = Uri.parse('${BASE_URL}/api/admin_clock-in/');
+  setState(() {
+    _isLoading = true; // Start loading
+  });
+  final clockUrl = Uri.parse('${BASE_URL}/api/admin_clock-in/');
   final token = await getToken();
 
   try {
     if (clockedIn) {
       // Clock Out
       final response = await http.post(
-        url,
+        clockUrl,
         body: jsonEncode({
           'latitude': latitude.toString(),
           'longitude': longitude.toString(),
           'last_out': DateFormat('HH:mm:ss').format(DateTime.now()),
-          'imei': imei,
+          'imei': _androidId,
         }),
         headers: {
           'Content-Type': 'application/json',
@@ -124,7 +127,6 @@ Future<void> _clockInOrOut() async {
           clockedIn = false;
         });
         await fetchClockIns();
-        // Store updated clockedIn state in SharedPreferences
         _storeClockedInState(false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -133,21 +135,12 @@ Future<void> _clockInOrOut() async {
           ),
         );
       } else {
-        final errorResponse = jsonDecode(response.body);
-        final errorMessage = errorResponse['error'] ??
-            'Failed to clock out. Please try again. Ensure location services are enabled';
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showError(response.body);
       }
     } else {
       // Clock In
       final response = await http.post(
-        url,
+        clockUrl,
         body: jsonEncode({
           'latitude': latitude.toString(),
           'longitude': longitude.toString(),
@@ -163,9 +156,9 @@ Future<void> _clockInOrOut() async {
       if (response.statusCode == 200) {
         setState(() {
           clockedIn = true;
+          _isLoading = false; // Stop loading
         });
         await fetchClockIns();
-        // Store updated clockedIn state in SharedPreferences
         _storeClockedInState(true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -174,16 +167,7 @@ Future<void> _clockInOrOut() async {
           ),
         );
       } else {
-        final errorResponse = jsonDecode(response.body);
-        final errorMessage = errorResponse['error'] ??
-            'Failed to clock in. Ensure your location services are enabled then try again.';
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showError(response.body);
       }
     }
   } catch (e) {
@@ -198,13 +182,29 @@ Future<void> _clockInOrOut() async {
 }
 
 
+
+void _showError(String responseBody) {
+    final errorResponse = jsonDecode(responseBody);
+    final errorMessage = errorResponse['error'] ??
+        'Failed to process request. Please try again.';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(errorMessage),
+        backgroundColor: Colors.red,
+      ),
+    );
+
+    setState(() {
+      _isLoading = false; // Stop loading
+    });
+  }
+
+
 void _storeClockedInState(bool value) async {
   SharedPreferences prefs = await SharedPreferences.getInstance();
   await prefs.setBool(_clockedInKey, value);
 }
-
-
-
 
   Future<void> fetchClockIns() async {
     String apiUrl = '${BASE_URL}/api/admin_clock-in/';
@@ -247,6 +247,11 @@ void _storeClockedInState(bool value) async {
         ),
       );
     }
+    finally {
+      setState(() {
+        _isLoading = false; // Stop loading
+      });
+    }
   }
 
  @override
@@ -270,6 +275,25 @@ Widget build(BuildContext context) {
                 style: TextStyle(color: Color(0xFF2F8E92), fontSize: 13),
               ),
             ),
+
+                       // Display Android ID
+            Text(
+              _androidId != null ? 'Android ID: $_androidId' : 'Fetching Android ID...',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 20),
+            // Display Latitude
+            Text(
+              _latitude != null ? 'Latitude: $_latitude' : 'Fetching latitude...',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 10),
+            // Display Longitude
+            Text(
+              _longitude != null ? 'Longitude: $_longitude' : 'Fetching longitude...',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 20),
           ),
         IconButton(
           icon: Icon(Icons.refresh),
@@ -294,17 +318,20 @@ Widget build(BuildContext context) {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ElevatedButton.icon(
-                      onPressed: _clockInOrOut,
-                      icon: Icon(clockedIn ? Icons.logout : Icons.check),
-                      label: Text(clockedIn ? 'Clock Out' : 'Clock In'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20.0),
-                        ),
-                      ),
-                    ),
+			ElevatedButton.icon(
+			  onPressed: () async {
+			    await _clockInOrOut();
+			  },
+			  icon: Icon(clockedIn ? Icons.logout : Icons.check),
+			  label: Text(clockedIn ? 'Clock Out' : 'Clock In'),
+			  style: ElevatedButton.styleFrom(
+			    backgroundColor: Colors.white,
+			    shape: RoundedRectangleBorder(
+			      borderRadius: BorderRadius.circular(20.0),
+			    ),
+			  ),
+			),
+
                     SizedBox(height: 16.0),
                     Text(
                       'Your clock-in history',
@@ -315,6 +342,10 @@ Widget build(BuildContext context) {
                   ],
                 ),
               ),
+            ),
+           if (_isLoading)
+            Center(
+              child: CircularProgressIndicator(),
             ),
           ],
         ),

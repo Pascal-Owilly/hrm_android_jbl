@@ -69,7 +69,7 @@ Future<void> _requestPermissions(BuildContext context) async {
             Container(
               margin: const EdgeInsets.all(8.0),
               child: Image.asset(
-                'assets/images/jawabu_logo.jpeg',
+                'assets/images/jawabu_logo.png',
                 height: 40,
               ),
             ),
