@@ -13,6 +13,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import '../../screens/constant.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:math';
 
 Future<void> storeUserData(String token, String userId) async {
   SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -54,6 +55,21 @@ Future<void> _downloadFile(String url, String filename) async {
   }
 }
 
+Future<String> getOrCreateUUID() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  String? uuid = prefs.getString('uuid');
+
+  if (uuid == null) {
+    uuid = _generateUUID();
+    await prefs.setString('uuid', uuid);
+  }
+  return uuid;
+}
+
+String _generateUUID() {
+  return base64Url.encode(List<int>.generate(16, (index) => Random().nextInt(256)));
+}
+
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -69,7 +85,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   double? latitude;
   double? longitude;
   bool clockedIn = false;
-  String? imei;
+  String? _androidId;
   List<dynamic> clockIns = [];
   List<dynamic> presentStaffers = [];
   
@@ -85,21 +101,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return build.version.sdkInt >= 30;
   }
 
-Future<void> _getIMEI() async {
-  if (await Permission.phone.request().isGranted) {
-    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-    AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-    if (mounted) {
-      setState(() {
-        imei = androidInfo.id; 
-      });
-    }
-    print('IMEI/ID: $imei'); // Print IMEI or ID here
-  } else {
-    print('Phone permission not granted');
+Future<String> getOrCreateUUID() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  String? uuid = prefs.getString('uuid');
+
+  if (uuid == null) {
+    uuid = _generateUUID();
+    await prefs.setString('uuid', uuid);
   }
+  return uuid;
 }
 
+String _generateUUID() {
+  return base64Url.encode(List<int>.generate(16, (index) => Random().nextInt(256)));
+}
 
   @override
   void initState() {
@@ -107,7 +122,9 @@ Future<void> _getIMEI() async {
     _getCurrentLocation();
       fetchClockIns();
       fetchUserData();
-     _getIMEI();
+    getOrCreateUUID().then((id) {
+      _androidId = id;
+    });
   }
   
   Future<void> _getCurrentLocation() async {
@@ -213,7 +230,7 @@ Future<void> fetchClockIns() async {
           'longitude': longitude.toString(),
           'first_in': DateFormat('HH:mm:ss').format(DateTime.now()),
           'last_out': DateFormat('HH:mm:ss').format(DateTime.now()),
-          'imei': imei, // Include IMEI here if required by your API
+          'imei': _androidId,
         }),
         headers: {
           'Content-Type': 'application/json',

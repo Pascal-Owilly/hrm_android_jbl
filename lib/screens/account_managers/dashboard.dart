@@ -10,6 +10,7 @@ import '../../screens/sidebar.dart';
 import '../../screens/constant.dart';
 import '../../location_service.dart'; 
 import 'package:provider/provider.dart';
+import 'dart:math';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({Key? key}) : super(key: key);
@@ -27,31 +28,36 @@ class _DashboardPageState extends State<DashboardPage> {
   bool clockedIn = false;
   List<dynamic> clockIns = []; 
   String? userId;
-  String? imei;
+  String? _androidId;
   
 Future<bool> isSdk30OrHigher() async {
   AndroidDeviceInfo build = await DeviceInfoPlugin().androidInfo;
   return build.version.sdkInt >= 30;
  }
 
-Future<void> _getIMEI() async {
-  if (await Permission.phone.request().isGranted) {
-   DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-    AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-   setState(() {
-         imei = androidInfo.id; // Using unique device ID as IMEI alternative
-   });
-   } else {
-    print('Phone permission not granted');
+
+Future<String> getOrCreateUUID() async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  String? uuid = prefs.getString('uuid');
+
+  if (uuid == null) {
+    uuid = _generateUUID();
+    await prefs.setString('uuid', uuid);
   }
+  return uuid;
 }
 
+String _generateUUID() {
+  return base64Url.encode(List<int>.generate(16, (index) => Random().nextInt(256)));
+}
 
   @override
   void initState() {
     super.initState();
     _fetchDashboardData(); // Fetch dashboard data
-    _getIMEI(); 
+    getOrCreateUUID().then((id) {
+      _androidId = id;
+    });
     fetchUserData();
     _getCurrentLocation();
     fetchClockIns();
@@ -98,6 +104,7 @@ Future<void> _clockInOrOut() async {
         'longitude': longitude.toString(),
         'first_in': DateFormat('HH:mm:ss').format(DateTime.now()),
         'last_out': DateFormat('HH:mm:ss').format(DateTime.now()),
+        'imei': _androidId,
       }),
       headers: {
         'Content-Type': 'application/json',
@@ -145,24 +152,29 @@ Future<void> fetchClockIns() async {
       },
     );
 
+    print('Response status: ${response.statusCode}');
+    print('Response body: ${response.body}');
+
     if (response.statusCode == 200) {
       setState(() {
         clockIns = jsonDecode(response.body);
       });
     } else {
       final errorResponse = jsonDecode(response.body);
-      final errorMessage = errorResponse['message'] ?? 'Failed to load clock-ins.';
+      final errorMessage = errorResponse['message'];
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(errorMessage)),
       );
     }
   } catch (e) {
+    print('Error fetching clock-ins: $e');
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Network error. Please try again later.')),
     );
   }
 }
+
 
 
   Future<void> _fetchDashboardData() async {

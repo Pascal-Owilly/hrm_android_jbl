@@ -92,6 +92,7 @@ flutter:
     - assets/images/jawabu_logo.jpeg
     - assets/images/board.jpg
     - assets/images/default_profile.png
+    - assets/images/jawabu_logo.png
     
     # Android icon resources
     - android/app/src/main/res/mipmap-mdpi/ic_launcher.png

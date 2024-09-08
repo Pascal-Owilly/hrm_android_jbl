@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../screens/constant.dart';
 import '../../location_service.dart'; 
 import 'package:provider/provider.dart';
+import 'dart:math';
 
 Future<void> storeUserData(String token, String userId) async {
   SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -36,157 +37,161 @@ class EmployeeDashboardScreen extends StatefulWidget {
 }
 
 class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
-
   bool _isLoading = false;
-
-
-  // Define a key for storing clockedIn state in SharedPreferences
   static const String _clockedInKey = 'clockedIn';
   DateTime selectedDate = DateTime.now();
   String keyword = '';
   double? latitude;
   double? longitude;
   bool clockedIn = false;
-  List<dynamic> clockIns = [];
+  List<dynamic> clockIns = [];  // Ensure this is defined
   String? userId;
+  String _deviceID = 'Loading...';  // Device ID variable
   String? _androidId;
-
-  Future<bool> isSdk30OrHigher() async {
-    AndroidDeviceInfo build = await DeviceInfoPlugin().androidInfo;
-    return build.version.sdkInt >= 30;
-  }
-
-  // Function to get Android ID
-  Future<void> _getAndroidId() async {
-    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-    AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-
-    setState(() {
-      _androidId = androidInfo.id; // Retrieve Android ID
-    });
-  }
 
   @override
   void initState() {
     super.initState();
     _loadClockedInState();
     fetchUserData();
-
     fetchClockIns();
-    _getAndroidId();
+    getOrCreateUUID().then((id) {
+      _androidId = id; 
+    });
+    _getDeviceID();  // Initialize device ID
   }
-  
- 
+
+  Future<void> _getDeviceID() async {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+    setState(() {
+      _deviceID = androidInfo.id;  // Use device ID
+    });
+  }
+
+  Future<bool> isSdk30OrHigher() async {
+    AndroidDeviceInfo build = await DeviceInfoPlugin().androidInfo;
+    return build.version.sdkInt >= 30;
+  }
+
+  Future<String> getOrCreateUUID() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? uuid = prefs.getString('uuid');
+
+    if (uuid == null) {
+      uuid = _generateUUID();
+      await prefs.setString('uuid', uuid);
+    }
+    return uuid;
+  }
+
+  String _generateUUID() {
+    return base64Url.encode(List<int>.generate(16, (index) => Random().nextInt(256)));
+  }
+
   Future<void> _loadClockedInState() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
       clockedIn = prefs.getBool(_clockedInKey) ?? false;
     });
   }
-  
+
   Future<void> fetchUserData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
         userId = prefs.getString('userId') ?? '';
-        if (userId?.isNotEmpty ?? false) {
-          print('User ID: $userId');
-        } else {
-          print('No user ID found');
-        }
       });
     }
   }
 
-Future<void> _clockInOrOut() async {
-  setState(() {
-    _isLoading = true; // Start loading
-  });
-  final clockUrl = Uri.parse('${BASE_URL}/api/admin_clock-in/');
-  final token = await getToken();
+  Future<void> _clockInOrOut() async {
+    setState(() {
+      _isLoading = true;
+    });
+    final clockUrl = Uri.parse('${BASE_URL}/api/admin_clock-in/');
+    final token = await getToken();
 
-  try {
-    if (clockedIn) {
-      // Clock Out
-      final response = await http.post(
-        clockUrl,
-        body: jsonEncode({
-          'latitude': latitude.toString(),
-          'longitude': longitude.toString(),
-          'last_out': DateFormat('HH:mm:ss').format(DateTime.now()),
-          'imei': _androidId,
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
+    final clockData = {
+      'latitude': latitude.toString(),
+      'longitude': longitude.toString(),
+      'device_id': _deviceID,  // Include device ID
+      'imei': _androidId,
+    };
 
-      if (response.statusCode == 200) {
-        setState(() {
-          clockedIn = false;
-        });
-        await fetchClockIns();
-        _storeClockedInState(false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Clock out successful!'),
-            backgroundColor: Colors.green,
-          ),
+    try {
+      if (clockedIn) {
+        // Clock Out
+        clockData['last_out'] = DateFormat('HH:mm:ss').format(DateTime.now());
+
+        final response = await http.post(
+          clockUrl,
+          body: jsonEncode(clockData),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
         );
-      } else {
-        _showError(response.body);
-      }
-    } else {
-      // Clock In
-      final response = await http.post(
-        clockUrl,
-        body: jsonEncode({
-          'latitude': latitude.toString(),
-          'longitude': longitude.toString(),
-          'first_in': DateFormat('HH:mm:ss').format(DateTime.now()),
-          'imei': imei,
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
 
-      if (response.statusCode == 200) {
-        setState(() {
-          clockedIn = true;
-          _isLoading = false; // Stop loading
-        });
-        await fetchClockIns();
-        _storeClockedInState(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Clock in successful!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (response.statusCode == 200) {
+          setState(() {
+            clockedIn = false;
+          });
+          await fetchClockIns();
+          _storeClockedInState(false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Clock out successful!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          _showError(response.body);
+        }
       } else {
-        _showError(response.body);
+        // Clock In
+        clockData['first_in'] = DateFormat('HH:mm:ss').format(DateTime.now());
+
+        final response = await http.post(
+          clockUrl,
+          body: jsonEncode(clockData),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          setState(() {
+            clockedIn = true;
+            _isLoading = false;
+          });
+          await fetchClockIns();
+          _storeClockedInState(true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Clock in successful!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        } else {
+          _showError(response.body);
+        }
       }
+    } catch (e) {
+      print('Error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Network error. Please connect and try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
-  } catch (e) {
-    print('Error: $e');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Network error. Please connect and try again.'),
-        backgroundColor: Colors.red,
-      ),
-    );
   }
-}
 
-
-
-void _showError(String responseBody) {
+  void _showError(String responseBody) {
     final errorResponse = jsonDecode(responseBody);
-    final errorMessage = errorResponse['error'] ??
-        'Failed to process request. Please try again.';
+    final errorMessage = errorResponse['error'] ?? 'Failed to process request. Please try again.';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -196,15 +201,14 @@ void _showError(String responseBody) {
     );
 
     setState(() {
-      _isLoading = false; // Stop loading
+      _isLoading = false;
     });
   }
 
-
-void _storeClockedInState(bool value) async {
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-  await prefs.setBool(_clockedInKey, value);
-}
+  void _storeClockedInState(bool value) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_clockedInKey, value);
+  }
 
   Future<void> fetchClockIns() async {
     String apiUrl = '${BASE_URL}/api/admin_clock-in/';
@@ -227,8 +231,7 @@ void _storeClockedInState(bool value) async {
         }
       } else {
         final errorResponse = jsonDecode(response.body);
-        final errorMessage =
-            errorResponse['error'] ?? 'Failed to load clock-ins.';
+        final errorMessage = errorResponse['error'] ?? 'Failed to load clock-ins.';
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -241,173 +244,159 @@ void _storeClockedInState(bool value) async {
       print('Error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('You have no internet connection.'),
+          content: Text('You have no internet connection.'),
           backgroundColor: Colors.red,
         ),
       );
-    }
-    finally {
+    } finally {
       setState(() {
-        _isLoading = false; // Stop loading
+        _isLoading = false;
       });
     }
   }
 
- @override
-Widget build(BuildContext context) {
-  final locationService = Provider.of<LocationService>(context);
+  @override
+  Widget build(BuildContext context) {
+    final locationService = Provider.of<LocationService>(context);
 
-  // Access latitude and longitude from LocationService
-  latitude = locationService.latitude;
-  longitude = locationService.longitude;
+    latitude = locationService.latitude;
+    longitude = locationService.longitude;
 
-  return Scaffold(
-    appBar: AppBar(
-      title: Text('Employee Dashboard'),
-      actions: [
-        if (latitude != null && longitude != null)
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: Center(
-              child: Text(
-                'Lat: ${latitude!.toStringAsFixed(2)}, Long: ${longitude!.toStringAsFixed(2)}',
-                style: TextStyle(color: Color(0xFF2F8E92), fontSize: 13),
-              ),
-            ),
-
-                       // Display Android ID
-            Text(
-              _androidId != null ? 'Android ID: $_androidId' : 'Fetching Android ID...',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 20),
-            // Display Latitude
-            Text(
-              _latitude != null ? 'Latitude: $_latitude' : 'Fetching latitude...',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            // Display Longitude
-            Text(
-              _longitude != null ? 'Longitude: $_longitude' : 'Fetching longitude...',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 20),
-          ),
-        IconButton(
-          icon: Icon(Icons.refresh),
-          onPressed: () {
-            setState(() {}); // Reload the page
-          },
-        ),
-      ],
-    ),
-    drawer: CustomSidebar(),
-    body: SingleChildScrollView(
-      child: Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Breadcrumb(),
-            SizedBox(height: 16.0),
-            Card(
-              child: Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-			ElevatedButton.icon(
-			  onPressed: () async {
-			    await _clockInOrOut();
-			  },
-			  icon: Icon(clockedIn ? Icons.logout : Icons.check),
-			  label: Text(clockedIn ? 'Clock Out' : 'Clock In'),
-			  style: ElevatedButton.styleFrom(
-			    backgroundColor: Colors.white,
-			    shape: RoundedRectangleBorder(
-			      borderRadius: BorderRadius.circular(20.0),
-			    ),
-			  ),
-			),
-
-                    SizedBox(height: 16.0),
-                    Text(
-                      'Your clock-in history',
-                      style: TextStyle(color: Colors.blue),
-                    ),
-                    SizedBox(height: 16.0),
-                    _buildAttendanceTable(),
-                  ],
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Employee Dashboard'),
+        actions: [
+          if (latitude != null && longitude != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: Center(
+                child: Text(
+                  'Lat: ${latitude!.toStringAsFixed(2)}, Long: ${longitude!.toStringAsFixed(2)}',
+                  style: TextStyle(color: Color(0xFF2F8E92), fontSize: 13),
                 ),
               ),
             ),
-           if (_isLoading)
-            Center(
-              child: CircularProgressIndicator(),
-            ),
-          ],
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: () {
+              setState(() {});
+            },
+          ),
+        ],
+      ),
+      drawer: CustomSidebar(),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Breadcrumb(),
+              SizedBox(height: 16.0),
+              Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Device ID: $_deviceID',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 16.0),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          await _clockInOrOut();
+                        },
+                        icon: Icon(clockedIn ? Icons.logout : Icons.check),
+                        label: Text(clockedIn ? 'Clock Out' : 'Clock In'),
+                      ),
+                      SizedBox(height: 16.0),
+                      if (_isLoading)
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: LinearProgressIndicator(),
+                        ),
+                      SizedBox(height: 16.0),
+                      Text(
+                        'Clock-In Records:',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 8.0),
+                      _buildAttendanceTable(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildAttendanceTable() {
-    if (clockIns.isEmpty) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.info_outline, color: Colors.grey),
-          const SizedBox(width: 20),
-          Text('No clock-in data available'),
-        ],
-      );
+    if (_isLoading) {
+      return Center(child: CircularProgressIndicator());
     }
-    return Column(
+
+    if (clockIns.isEmpty) {
+      return Center(child: Text('No clock-ins found.'));
+    }
+
+    return Table(
+      border: TableBorder.all(),
+      columnWidths: {
+        0: FixedColumnWidth(80.0),
+        1: FixedColumnWidth(100.0),
+        2: FixedColumnWidth(100.0),
+        3: FixedColumnWidth(150.0),
+      },
       children: [
-        Table(
-          border: TableBorder.all(),
+        TableRow(
           children: [
-            TableRow(
-              children: [
-                _buildTableHeader('Name'),
-                _buildTableHeader('Date'),
-                _buildTableHeader('First-In (Arrival)'),
-                _buildTableHeader('Last-Out (Departure)'),
-              ],
-            ),
-            ...clockIns.map((clockIn) {
-              return TableRow(
-                children: [
-                  _buildTableCell(clockIn['name']),
-                  _buildTableCell(clockIn['date']),
-                  _buildTableCell(clockIn['first_in']),
-                  _buildTableCell(clockIn['last_out']),
-                ],
-              );
-            }).toList(),
+            _buildTableHeaderCell('Date'),
+            _buildTableHeaderCell('First In'),
+            _buildTableHeaderCell('Last Out'),
+            _buildTableHeaderCell('Location'),
           ],
         ),
+        ...clockIns.map<TableRow>((entry) {
+          return TableRow(
+            children: [
+              _buildTableCell(entry['date'] ?? ''),
+              _buildTableCell(entry['first_in'] ?? ''),
+              _buildTableCell(entry['last_out'] ?? ''),
+              _buildTableCell(
+                entry['latitude'] != null && entry['longitude'] != null
+                    ? '(${entry['latitude']}, ${entry['longitude']})'
+                    : 'Location unavailable',
+              ),
+            ],
+          );
+        }).toList(),
       ],
     );
   }
 
-  Widget _buildTableHeader(String text) {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Text(
-        text,
-        style: TextStyle(fontWeight: FontWeight.bold),
+  Widget _buildTableHeaderCell(String text) {
+    return TableCell(
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Text(
+          text,
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
 
   Widget _buildTableCell(String text) {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Text(text),
+    return TableCell(
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Text(text),
+      ),
     );
   }
 }
@@ -417,18 +406,15 @@ class Breadcrumb extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        GestureDetector(
-          onTap: () {
-            Navigator.pushNamed(context, '/admin_dashboard');
-          },
-          child: Text(
-            'Dashboard',
-            style: TextStyle(color: Colors.blue),
-          ),
+        Text(
+          'Home > ',
+          style: TextStyle(color: Colors.blue),
         ),
-        Text(' / Attendance'),
+        Text(
+          'Attendance',
+          style: TextStyle(color: Colors.grey),
+        ),
       ],
     );
   }
 }
-
