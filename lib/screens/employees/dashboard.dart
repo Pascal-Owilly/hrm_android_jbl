@@ -1,16 +1,14 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../screens/sidebar.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:permission_handler/permission_handler.dart';
-import '../../screens/constant.dart';
-import '../../location_service.dart'; 
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+
+import '../../screens/sidebar.dart';
+import '../../screens/constant.dart';
+import '../../location_service.dart';
 
 Future<void> storeUserData(String token, String userId) async {
   SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -32,22 +30,19 @@ class EmployeeDashboardScreen extends StatefulWidget {
   const EmployeeDashboardScreen({Key? key}) : super(key: key);
 
   @override
-  _EmployeeDashboardScreenState createState() =>
-      _EmployeeDashboardScreenState();
+  _EmployeeDashboardScreenState createState() => _EmployeeDashboardScreenState();
 }
 
 class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
   bool _isLoading = false;
   static const String _clockedInKey = 'clockedIn';
-  DateTime selectedDate = DateTime.now();
-  String keyword = '';
   double? latitude;
   double? longitude;
   bool clockedIn = false;
-  List<dynamic> clockIns = [];  // Ensure this is defined
+  List<dynamic> clockIns = [];
   String? userId;
-  String _deviceID = 'Loading...';  // Device ID variable
-  String? _androidId;
+  String _deviceID = 'Loading...';
+  //String? _androidId;
 
   @override
   void initState() {
@@ -55,38 +50,15 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
     _loadClockedInState();
     fetchUserData();
     fetchClockIns();
-    getOrCreateUUID().then((id) {
-      _androidId = id; 
-    });
-    _getDeviceID();  // Initialize device ID
+    _getDeviceID();
   }
 
   Future<void> _getDeviceID() async {
     DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
     AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
     setState(() {
-      _deviceID = androidInfo.id;  // Use device ID
+      _deviceID = androidInfo.id;
     });
-  }
-
-  Future<bool> isSdk30OrHigher() async {
-    AndroidDeviceInfo build = await DeviceInfoPlugin().androidInfo;
-    return build.version.sdkInt >= 30;
-  }
-
-  Future<String> getOrCreateUUID() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? uuid = prefs.getString('uuid');
-
-    if (uuid == null) {
-      uuid = _generateUUID();
-      await prefs.setString('uuid', uuid);
-    }
-    return uuid;
-  }
-
-  String _generateUUID() {
-    return base64Url.encode(List<int>.generate(16, (index) => Random().nextInt(256)));
   }
 
   Future<void> _loadClockedInState() async {
@@ -115,8 +87,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
     final clockData = {
       'latitude': latitude.toString(),
       'longitude': longitude.toString(),
-      'device_id': _deviceID,  // Include device ID
-      'imei': _androidId,
+      'imei': _deviceID,
+      //'imei': _androidId,
     };
 
     try {
@@ -182,10 +154,14 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
       print('Error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Network error. Please connect and try again.'),
+          content: Text('Server error. Please try again after sometime.'),
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -255,6 +231,50 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
     }
   }
 
+  Widget _buildAttendanceTable() {
+    if (_isLoading) {
+      return Center(child: CircularProgressIndicator());
+    }
+
+    if (clockIns.isEmpty) {
+      return Center(child: Text('No attendance records found.'));
+    }
+
+    return DataTable(
+      columns: [
+        _buildTableHeaderCell('Date'),
+        _buildTableHeaderCell('First In'),
+        _buildTableHeaderCell('Last Out'),
+        _buildTableHeaderCell('Location'),
+      ],
+      rows: clockIns.map<DataRow>((clockIn) {
+        return DataRow(cells: [
+          _buildTableCell(clockIn['date'] ?? ''),
+          _buildTableCell(clockIn['first_in'] ?? ''),
+          _buildTableCell(clockIn['last_out'] ?? ''),
+          _buildTableCell(
+            clockIn['latitude'] != null && clockIn['longitude'] != null
+                ? '(${clockIn['latitude']}, ${clockIn['longitude']})'
+                : 'Location unavailable',
+          ),
+        ]);
+      }).toList(),
+    );
+  }
+
+  DataColumn _buildTableHeaderCell(String title) {
+    return DataColumn(
+      label: Text(
+        title,
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  DataCell _buildTableCell(String value) {
+    return DataCell(Text(value));
+  }
+
   @override
   Widget build(BuildContext context) {
     final locationService = Provider.of<LocationService>(context);
@@ -308,22 +328,17 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
                         onPressed: () async {
                           await _clockInOrOut();
                         },
-                        icon: Icon(clockedIn ? Icons.logout : Icons.check),
+                        icon: Icon(clockedIn ? Icons.logout : Icons.login),
                         label: Text(clockedIn ? 'Clock Out' : 'Clock In'),
-                      ),
-                      SizedBox(height: 16.0),
-                      if (_isLoading)
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: LinearProgressIndicator(),
+                        style: ElevatedButton.styleFrom(
+				backgroundColor: clockedIn ? Color(0xFFd1c62a) : Color(0xFFfdeb3d),
+
                         ),
-                      SizedBox(height: 16.0),
-                      Text(
-                        'Clock-In Records:',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
-                      SizedBox(height: 8.0),
-                      _buildAttendanceTable(),
+                      SizedBox(height: 16.0),
+                      _isLoading
+                          ? Center(child: CircularProgressIndicator())
+                          : _buildAttendanceTable(),
                     ],
                   ),
                 ),
@@ -331,71 +346,6 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAttendanceTable() {
-    if (_isLoading) {
-      return Center(child: CircularProgressIndicator());
-    }
-
-    if (clockIns.isEmpty) {
-      return Center(child: Text('No clock-ins found.'));
-    }
-
-    return Table(
-      border: TableBorder.all(),
-      columnWidths: {
-        0: FixedColumnWidth(80.0),
-        1: FixedColumnWidth(100.0),
-        2: FixedColumnWidth(100.0),
-        3: FixedColumnWidth(150.0),
-      },
-      children: [
-        TableRow(
-          children: [
-            _buildTableHeaderCell('Date'),
-            _buildTableHeaderCell('First In'),
-            _buildTableHeaderCell('Last Out'),
-            _buildTableHeaderCell('Location'),
-          ],
-        ),
-        ...clockIns.map<TableRow>((entry) {
-          return TableRow(
-            children: [
-              _buildTableCell(entry['date'] ?? ''),
-              _buildTableCell(entry['first_in'] ?? ''),
-              _buildTableCell(entry['last_out'] ?? ''),
-              _buildTableCell(
-                entry['latitude'] != null && entry['longitude'] != null
-                    ? '(${entry['latitude']}, ${entry['longitude']})'
-                    : 'Location unavailable',
-              ),
-            ],
-          );
-        }).toList(),
-      ],
-    );
-  }
-
-  Widget _buildTableHeaderCell(String text) {
-    return TableCell(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Text(
-          text,
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTableCell(String text) {
-    return TableCell(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Text(text),
       ),
     );
   }
@@ -418,3 +368,4 @@ class Breadcrumb extends StatelessWidget {
     );
   }
 }
+

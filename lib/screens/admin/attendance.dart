@@ -55,22 +55,6 @@ Future<void> _downloadFile(String url, String filename) async {
   }
 }
 
-Future<String> getOrCreateUUID() async {
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-  String? uuid = prefs.getString('uuid');
-
-  if (uuid == null) {
-    uuid = _generateUUID();
-    await prefs.setString('uuid', uuid);
-  }
-  return uuid;
-}
-
-String _generateUUID() {
-  return base64Url.encode(List<int>.generate(16, (index) => Random().nextInt(256)));
-}
-
-
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
 
@@ -85,7 +69,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   double? latitude;
   double? longitude;
   bool clockedIn = false;
-  String? _androidId;
+  String? _deviceId;
+  String _deviceID = 'Loading...';
   List<dynamic> clockIns = [];
   List<dynamic> presentStaffers = [];
   
@@ -101,32 +86,25 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return build.version.sdkInt >= 30;
   }
 
-Future<String> getOrCreateUUID() async {
-  SharedPreferences prefs = await SharedPreferences.getInstance();
-  String? uuid = prefs.getString('uuid');
-
-  if (uuid == null) {
-    uuid = _generateUUID();
-    await prefs.setString('uuid', uuid);
-  }
-  return uuid;
-}
-
-String _generateUUID() {
-  return base64Url.encode(List<int>.generate(16, (index) => Random().nextInt(256)));
-}
-
   @override
   void initState() {
     super.initState();
     _getCurrentLocation();
       fetchClockIns();
       fetchUserData();
-    getOrCreateUUID().then((id) {
-      _androidId = id;
-    });
+    _getDeviceID();
+
   }
   
+  
+  Future<void> _getDeviceID() async {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+    setState(() {
+      _deviceID = androidInfo.id;
+    });
+  }
+
   Future<void> _getCurrentLocation() async {
     final status = await Permission.location.request();
     if (status.isGranted) {
@@ -219,48 +197,46 @@ Future<void> fetchClockIns() async {
 
 
   Future<void> _clockInOrOut() async {
-    final url = Uri.parse('${BASE_URL}/api/admin_clock-in/');
-    final token = await getToken(); // Replace with your method to get the token
+  final url = Uri.parse('${BASE_URL}/api/admin_clock-in/');
+  final token = await getToken(); // Replace with your method to get the token
 
-    try {
-      final response = await http.post(
-        url,
-        body: jsonEncode({
-          'latitude': latitude.toString(),
-          'longitude': longitude.toString(),
-          'first_in': DateFormat('HH:mm:ss').format(DateTime.now()),
-          'last_out': DateFormat('HH:mm:ss').format(DateTime.now()),
-          'imei': _androidId,
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      );
+  try {
+    final response = await http.post(
+      url,
+      body: jsonEncode({
+        'latitude': latitude.toString(),
+        'longitude': longitude.toString(),
+        'first_in': DateFormat('HH:mm:ss').format(DateTime.now()),
+        'last_out': DateFormat('HH:mm:ss').format(DateTime.now()),
+        'imei': _deviceID, // Use device ID here
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
 
-      if (response.statusCode == 200) {
-        setState(() {
-          clockedIn = !clockedIn;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Clock in/out successful!')),
-        );
-      } else {
-        final errorResponse = jsonDecode(response.body);
-        final errorMessage = errorResponse['error'] ?? 'Failed to clock in/out. Ensure your location services are enabled then try again';
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage)),
-        );
-      }
-    } catch (e) {
+    if (response.statusCode == 200) {
+      setState(() {
+        clockedIn = !clockedIn;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Network error. Please connect and try again.')),
+        const SnackBar(content: Text('Clock in/out successful!')),
+      );
+    } else {
+      final errorResponse = jsonDecode(response.body);
+      final errorMessage = errorResponse['error'] ?? 'Failed to clock in/out. Ensure your location services are enabled then try again';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
       );
     }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Network error. Please connect and try again.')),
+    );
   }
-
-
+}
 
 @override
 Widget build(BuildContext context) {
@@ -350,45 +326,78 @@ Widget build(BuildContext context) {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _clockInOrOut,
-                      icon: clockedIn ? const Icon(Icons.logout) : const Icon(Icons.check),
-                      label: Text(clockedIn ? 'Clock Out' : 'Clock In'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFFFFFF),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20.0),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16.0),
-                    const Text(
-                      'List of employee(s) that clocked-in today',
-                      style: TextStyle(color: Colors.blue),
-                    ),
-                    const SizedBox(height: 16.0),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        IconButton(
-                          onPressed: _downloadPDF,
-                          icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
-                          tooltip: 'Download PDF',
-                        ),
-                        const SizedBox(width: 8.0),
-                        IconButton(
-                          onPressed: _downloadExcel,
-                          icon: const Icon(Icons.file_download, color: Colors.green),
-                          tooltip: 'Download Excel',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16.0),
-                    _buildFilterForm(),
-                    const SizedBox(height: 16.0),
-                    _buildAttendanceTable(),
-                  ],
+children: [
+  // Device ID text with professional styling
+  Padding(
+    padding: const EdgeInsets.only(bottom: 16.0), // Adds margin bottom for spacing
+    child: Text(
+      'Device ID: $_deviceID',
+      style: TextStyle(
+        fontSize: 18, // Adjusted font size for better readability
+        fontWeight: FontWeight.w500, // Slightly lighter weight for a professional look
+        color: Colors.black87, // A more subtle color for text
+      ),
+    ),
+  ),
+  
+  // Clock In/Out button
+  ElevatedButton.icon(
+    onPressed: _clockInOrOut,
+    icon: clockedIn ? const Icon(Icons.logout) : const Icon(Icons.check),
+    label: Text(clockedIn ? 'Clock Out' : 'Clock In'),
+    style: ElevatedButton.styleFrom(
+      backgroundColor: const Color(0xFFFFFFFF),
+      foregroundColor: Colors.black, // Color of the icon and text
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20.0),
+      ),
+      padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0), // Added padding for button
+    ),
+  ),
+
+  const SizedBox(height: 16.0), // Spacing between elements
+  
+  // Title for employee list
+  const Text(
+    'List of employee(s) that clocked-in today',
+    style: TextStyle(
+      color: Colors.blue,
+      fontSize: 16, // Adjusted font size for readability
+      fontWeight: FontWeight.bold, // Bold text for emphasis
+    ),
+  ),
+
+  const SizedBox(height: 16.0), // Spacing between elements
+  
+  // Buttons for downloading files
+  Row(
+    mainAxisAlignment: MainAxisAlignment.end,
+    children: [
+      IconButton(
+        onPressed: _downloadPDF,
+        icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
+        tooltip: 'Download PDF',
+      ),
+      const SizedBox(width: 8.0), // Spacing between icons
+      IconButton(
+        onPressed: _downloadExcel,
+        icon: const Icon(Icons.file_download, color: Colors.green),
+        tooltip: 'Download Excel',
+      ),
+    ],
+  ),
+  
+  const SizedBox(height: 16.0), // Spacing between elements
+  
+  // Filter form
+  _buildFilterForm(),
+  
+  const SizedBox(height: 16.0), // Spacing between elements
+  
+  // Attendance table
+  _buildAttendanceTable(),
+],
+
                 ),
               ),
             ),
@@ -465,32 +474,7 @@ Widget build(BuildContext context) {
 ],
 
           ),
-          //Column(
-            //crossAxisAlignment: CrossAxisAlignment.start,
-            //children: [
-              //Text('Search by name'),
-              //SizedBox(height: 8.0),
-              //Container(
-                //width: 150,
-                //child: TextFormField(
-                  //decoration: InputDecoration(
-                    //border: OutlineInputBorder(),
-                    //suffixIcon: IconButton(
-                    //  icon: Icon(Icons.search),
-                     // onPressed: () {
-                     //   _searchByName(keyword);
-                    //  },
-                   // ),
-                 // ),
-                  //onChanged: (value) {
-                   // setState(() {
-                     // keyword = value;
-                    //});
-                  //},
-               // ),
-             // ),
-           // ],
-         // ),
+
         ],
       ),
     );
@@ -675,17 +659,14 @@ class Employee {
     required this.name,
   });
 }
-
- class CardWidget extends StatelessWidget {
+class CardWidget extends StatelessWidget {
   final IconData icon;
   final String title;
-  //final String count;
   final String url;
 
-  const CardWidget({super.key, 
+  const CardWidget({
     required this.icon,
     required this.title,
-    //required this.count,
     required this.url,
   });
 
@@ -696,34 +677,16 @@ class Employee {
         Navigator.pushNamed(context, url);
       },
       child: Card(
-        elevation: 3.0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(50.0),
-        ),
-        color: const Color.fromARGB(255, 249, 250, 251),
-        shadowColor: const Color.fromRGBO(249, 249, 249, 0.7),
+        elevation: 5,
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          child: Row(
             children: <Widget>[
               Icon(icon, color: const Color(0xFF773697), size: 40.0),
-              const SizedBox(height: 10.0),
+              const SizedBox(width: 16.0),
               Text(
                 title,
-                style: const TextStyle(
-                  color: Color(0xFF773697),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 10.0),
-              
-              const SizedBox(height: 5.0),
-              const Text(
-                'List',
-                style: TextStyle(
-                  color: Color(0xFFC2C2C2),
-                ),
+                style: const TextStyle(fontSize: 18.0),
               ),
             ],
           ),
