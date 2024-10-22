@@ -1,17 +1,28 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../screens/constant.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({Key? key}) : super(key: key);
+
+  @override
+  _LoginScreenState createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-
-  LoginScreen({Key? key}) : super(key: key);
+  bool isLoading = false; // To track loading state
 
   Future<void> loginUser(BuildContext context) async {
     String url = '${BASE_URL}/api/login/';
+    setState(() {
+      isLoading = true; // Show loading indicator
+    });
+
     try {
       final response = await http.post(
         Uri.parse(url),
@@ -21,9 +32,13 @@ class LoginScreen extends StatelessWidget {
         },
       );
 
+      setState(() {
+        isLoading = false; // Hide loading indicator
+      });
+
       if (response.statusCode == 200) {
         Map<String, dynamic> jsonResponse = jsonDecode(response.body);
-        print('JSON response: $jsonResponse'); 
+        print('JSON response: $jsonResponse');
 
         String token = jsonResponse['token'];
         String username = jsonResponse['username'];
@@ -57,8 +72,27 @@ class LoginScreen extends StatelessWidget {
             break;
         }
       } else {
-        Map<String, dynamic> errorResponse = jsonDecode(response.body);
-        String errorMessage = errorResponse['non_field_errors']?.first ?? 'Failed to login. Please try again.';
+        // Capture and display the actual backend error response
+        Map<String, dynamic> errorResponse;
+        try {
+          errorResponse = jsonDecode(response.body);
+        } catch (jsonError) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${response.body}'),
+            ),
+          );
+          return;
+        }
+
+        String errorMessage;
+        if (errorResponse.containsKey('non_field_errors')) {
+          errorMessage = errorResponse['non_field_errors']?.first ?? 'Failed to login. Please try again.';
+        } else if (errorResponse.containsKey('detail')) {
+          errorMessage = errorResponse['detail']; // For Django REST Framework error
+        } else {
+          errorMessage = 'Unknown error: ${response.body}';
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -67,10 +101,22 @@ class LoginScreen extends StatelessWidget {
         );
       }
     } catch (e) {
-      print('Error: $e');
+      setState(() {
+        isLoading = false; // Hide loading indicator on error
+      });
+
+      String errorMessage;
+      if (e is SocketException) {
+        errorMessage = 'No Internet Connection';
+      } else if (e is FormatException) {
+        errorMessage = 'Invalid response format';
+      } else {
+        errorMessage = 'Unexpected error: $e';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Network error. Please connect and try again later.'),
+          content: Text('Network error: $errorMessage'),
           backgroundColor: Colors.red,
         ),
       );
@@ -139,23 +185,25 @@ class LoginScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16.0),
-              ElevatedButton(
-                onPressed: () => loginUser(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFfdeb3d),
-                  padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 32.0),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25.0),
-                  ),
-                ),
-                child: const Text(
-                  'Login',
-                  style: TextStyle(
-                    fontSize: 18.0,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
+              isLoading // Show loading spinner if loading
+                  ? const CircularProgressIndicator()
+                  : ElevatedButton(
+                      onPressed: () => loginUser(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFfdeb3d),
+                        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 32.0),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25.0),
+                        ),
+                      ),
+                      child: const Text(
+                        'Login',
+                        style: TextStyle(
+                          fontSize: 18.0,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
               const SizedBox(height: 8.0),
               GestureDetector(
                 onTap: () => showPasswordResetModal(context),
