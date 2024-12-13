@@ -1,4 +1,4 @@
-package com.example.jawabu_best_limited
+package com.jawabu.jawabu_best_limited
 
 import io.flutter.embedding.android.FlutterActivity
 

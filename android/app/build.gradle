@@ -13,9 +13,15 @@ if (localPropertiesFile.exists()) {
 def flutterVersionCode = localProperties.getProperty("flutter.versionCode", "1").toInteger()
 def flutterVersionName = localProperties.getProperty("flutter.versionName", "1.0")
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
-    namespace = "com.example.jawabu_best_limited"
-    compileSdk = 34 // Replace with the latest version if needed
+    namespace = "com.jawabu.jawabu_best_limited"
+    compileSdk = 34
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -24,16 +30,33 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     defaultConfig {
-        applicationId = "com.example.jawabu_best_limited"
-        minSdk = 21 // Adjust if necessary
+        applicationId = "com.jawabu.jawabu_best_limited"
+        minSdk = 21
         targetSdk = 34
         versionCode = flutterVersionCode
         versionName = flutterVersionName
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+        }
+    }
+
+    signingConfigs {
+        release {
+            keyAlias = keystoreProperties['keyAlias']
+            keyPassword = keystoreProperties['keyPassword']
+            storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+            storePassword = keystoreProperties['storePassword']
+        }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.debug
+            // Reference the release signing configuration
+            signingConfig = signingConfigs.release
+
+            // Enable ProGuard for release builds
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

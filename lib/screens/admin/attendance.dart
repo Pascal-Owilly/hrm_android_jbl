@@ -333,7 +333,7 @@ children: [
     child: Text(
       'Device ID: $_deviceID',
       style: TextStyle(
-        fontSize: 18, // Adjusted font size for better readability
+        fontSize: 11, // Adjusted font size for better readability
         fontWeight: FontWeight.w500, // Slightly lighter weight for a professional look
         color: Colors.black87, // A more subtle color for text
       ),

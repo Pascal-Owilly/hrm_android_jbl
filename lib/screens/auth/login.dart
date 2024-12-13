@@ -130,7 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return AlertDialog(
           title: const Text('Password Reset'),
           content: const Text(
-            'Please use the web app to reset your password. Once successful, return here to log in.',
+            'Please use the web app jawabubest-wms.com/password_reset to reset your password. Once successful, return here to login.',
           ),
           actions: <Widget>[
             TextButton(

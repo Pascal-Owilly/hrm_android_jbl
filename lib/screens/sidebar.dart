@@ -232,7 +232,7 @@ class _CustomSidebarState extends State<CustomSidebar> {
               children: [
                 CircleAvatar(
                   radius: 30.0,
-                  backgroundImage: AssetImage('assets/images/default_profile.svg'),
+                  backgroundImage: AssetImage('assets/images/default_profile.png'),
                 ),
                 SizedBox(height: 10.0),
                 Text(
